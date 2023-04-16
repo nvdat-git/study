@@ -1,0 +1,98 @@
+#!/bin/bash
+# các bước thực hiện
+# tạo ra 2 ec2 instance chạy Amazon Linux 2
+## ec2-jenkins
+# Security Group: open SSH and port 8080
+# các bước cài đặt trên ec2-jenkins
+# chuyển qua mode sudo
+sudo su -
+#update ec2
+yum update –y
+#cài đặt git
+yum install git -y
+#tải xuống và lưu tập tin jenkins.repo
+wget -O /etc/yum.repos.d/jenkins.repo \https://pkg.jenkins.io/redhat-stable/jenkins.repo
+#import public key jenkins
+rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+#cài đặt bản mở rộng java-openjdk 11
+sudo amazon-linux-extras install java-openjdk11 -y
+yum install java-11-amazon-corretto -y
+#cài đặt jenkins
+yum install jenkins -y
+systemctl enable jenkins
+systemctl start jenkins
+# đến đây là xong phần cài đặt. để kiểm tra key ssh của jenkins vào phần sau "vi /var/lib/jenkins/secrets/initialAdminPassword"
+#login đên jenkin lỗi dùng lệnh "vi /etc/passwd" sửa thành "jenkins:x:995:993:Jenkins Automation Server:/var/lib/jenkins:/bin/bash"
+#suwr dungj web vào địa chỉ: PublicIPJenkin:8080, nhập password ssh đã tạo vừa nãy và cấu hình
+#tạo folder jenkins tại home và file key-user-www.pem 
+mkdir /home/jenkins
+#vi /home/jenkins/key-user-www.pem copy key vào đây
+chmod 400 /home/jenkins/key-user-www.pem
+chown -Rf jenkins:root /home/jenkins/
+
+## jenkins web
+# laays key ở "vi /var/lib/jenkins/secrets/initialAdminPassword" và nhập
+# chọn freestyle project
+#Source Code Management chọn git
+#Repository URL nhập link của repository tương ứng trên git
+#chọn GitHub hook trigger for GITScm polling
+#Build Steps chọn Execute shell
+# nhập như sau:
+# #!/bin/bash
+#ssh -T -i /home/jenkins/key-user-www.pem user-www@13.229.234.194 << EOF
+#cd /var/www/html/nvdat-web
+#git pull
+#EOF
+
+## ec2-web-server
+#vào mode root
+sudo su -
+#cài đặt httpd
+yum install httpd -y
+amazon-linux-extras install epel -y
+rpm -Uvh http://rpms.famillecollet.com/enterprise/remi-release-7.rpm
+yum install -y php70 php70-php php7-php-pecl-memcached php70-php-mysqlnd php7-php-xml
+# tạo một liên kết tượng trưng (symbolic link) từ /usr/bin/php tới /usr/bin/php70
+#Việc này có thể giúp cho các ứng dụng truy cập vào php sử dụng phiên bản cụ thể là php70
+ln -s /usr/bin/php70 /usr/bin/php
+service httpd start
+chkconfig httpd on
+#cài đặt git
+yum install git -y
+#add user và ssh key để jenkins dùng
+useradd user-www
+sudo su - user-www
+#khi tạo key nhớ không nhập password
+ssh-keygen -t rsa
+#đổi tên public key
+mv /home/user-www/.ssh/id_rsa.pub /home/user-www/.ssh/authorized_keys
+#copy key id_ras qua ec2-jenkins
+
+mkdir /var/www/html/nvdat-web
+chown -Rf user-www:apache /var/www/html/nvdat-web/
+# vi /etc/httpd/conf/httpd.conf sửa file httpd.conf
+#thêm Listen 81
+#NameVirtualHost *:81
+#<VirtualHost *:81>
+ #       DocumentRoot /var/www/html/nvdat-web/
+  #      <Directory "/var/www/html/nvdat-web">
+   #             order deny,allow
+    #            Allow from all
+     #           AllowOverride All
+      #          Require all granted
+       # </Directory>
+#</VirtualHost>
+#sau khi xong thì systemctl restart httpd
+# các bước git clone
+#su - user-www
+#cd /var/www/html/nvdat-web
+#git clone https://github.com/nvdat-git/nvdat-web.git .
+#vao web phan webhook http://PublicIPJenkin:8080/github-webhook/
+
+
+
+
+
+
+
+
